@@ -1,30 +1,11 @@
+import { handleBuilderRequest } from "./builder-http.js";
 import { CREVIA_APP_KEY } from "./contract.js";
-import {
-  authenticateProductRequest,
-  completeCallback,
-  type ControlPlane,
-  type SessionStore,
-} from "./identity.js";
+import { authenticateLocalSession, authenticateProductRequest, completeCallback } from "./identity.js";
 import { evaluateReadiness, healthReport } from "./readiness.js";
-import { findOrganizationByOrbiaId, provisionOrganization, type FoundationStore } from "./store.js";
+import { findOrganizationByOrbiaId, provisionOrganization } from "./store.js";
+import type { HttpResponse, ServerDeps } from "./http-types.js";
 
-export type HttpResponse = {
-  status: number;
-  headers: Record<string, string>;
-  body: unknown;
-};
-
-export type ServerDeps = {
-  store: FoundationStore;
-  sessions: SessionStore;
-  controlPlane: ControlPlane;
-  provisioningKey: string;
-  clientId: string;
-  clientSecret: string;
-  identityMode: "dev" | "orbia";
-  appEnv: string;
-  secureCookies: boolean;
-};
+export type { HttpResponse, ServerDeps } from "./http-types.js";
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}): HttpResponse {
   return {
@@ -110,13 +91,26 @@ export async function handleRequest(
     return json(200, result);
   }
 
+  const builder = await handleBuilderRequest(input, deps);
+
+  if (builder) {
+    return builder;
+  }
+
   if (input.method === "GET" && path === "/api/session") {
     const cookie = input.headers.cookie ?? "";
-    const session = authenticateProductRequest({
+    const local = authenticateLocalSession({
       cookieHeader: cookie,
-      mode: deps.identityMode,
+      appEnv: deps.appEnv,
       sessions: deps.sessions,
     });
+    const session = local.ok
+      ? local
+      : authenticateProductRequest({
+          cookieHeader: cookie,
+          mode: deps.identityMode,
+          sessions: deps.sessions,
+        });
 
     if (!session.ok) {
       return json(401, session);

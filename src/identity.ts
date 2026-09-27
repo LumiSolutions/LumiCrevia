@@ -302,6 +302,75 @@ function parseCookies(header: string): Map<string, string> {
   return cookies;
 }
 
+export function openLocalSession(input: {
+  sessions: SessionStore;
+  appEnv: string;
+  orbiaUserId: string;
+  orbiaOrganizationId: string;
+  creviaOrganizationId: string;
+  membershipRole: OrbiaMembershipRole;
+  modules: CreviaModuleKey[];
+  secure?: boolean;
+}) {
+  if (!devActorAllowed(input.appEnv)) {
+    return { ok: false as const, reason: "dev_actor_forbidden" as const };
+  }
+
+  const token = randomBytes(32).toString("base64url");
+  const now = new Date();
+  const session: StoredSession = {
+    id: `cps_${randomBytes(8).toString("base64url")}`,
+    tokenHash: hashToken(token),
+    orbiaUserId: input.orbiaUserId,
+    orbiaOrganizationId: input.orbiaOrganizationId,
+    creviaOrganizationId: input.creviaOrganizationId,
+    membershipRole: input.membershipRole,
+    capabilities: capabilitiesForOrbiaRole(input.membershipRole),
+    modules: input.modules,
+    evaluatedAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
+    revokedAt: null,
+  };
+  input.sessions.save(session);
+
+  return {
+    ok: true as const,
+    token,
+    cookie: sessionCookie(token, { secure: input.secure === true }),
+    context: publicContext(session),
+  };
+}
+
+export function authenticateLocalSession(input: {
+  cookieHeader: string;
+  appEnv: string;
+  sessions: SessionStore;
+  now?: Date;
+}) {
+  if (!devActorAllowed(input.appEnv)) {
+    return { ok: false as const, reason: "dev_actor_forbidden" as const };
+  }
+
+  const cookies = parseCookies(input.cookieHeader);
+  const product = cookies.get(CREVIA_SESSION_COOKIE);
+
+  if (!product) {
+    return { ok: false as const, reason: "no_session" as const };
+  }
+
+  const session = input.sessions.find(product);
+
+  if (!session || session.revokedAt) {
+    return { ok: false as const, reason: "no_session" as const };
+  }
+
+  if (Date.parse(session.expiresAt) <= (input.now ?? new Date()).getTime()) {
+    return { ok: false as const, reason: "expired" as const };
+  }
+
+  return { ok: true as const, context: publicContext(session) };
+}
+
 export function authenticateProductRequest(input: {
   cookieHeader: string;
   mode: CreviaIdentityMode;

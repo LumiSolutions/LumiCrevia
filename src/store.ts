@@ -493,6 +493,7 @@ export function saveDraft(
   };
   store.revisions.push(revision);
   site.site.draftVersion = version;
+  syncPagesFromSnapshot(store, site.site.organizationId, site.site.id, revision.snapshot);
 
   return { ok: true as const, revision, publishedRevisionId: site.site.publishedRevisionId };
 }
@@ -840,6 +841,88 @@ export function saveDomain(
   };
   store.domains.push(domain);
   return { ok: true as const, domain, dnsMutated: false as const };
+}
+
+export function listSites(store: FoundationStore, organizationId: string) {
+  return store.sites.filter((site) => site.organizationId === organizationId && site.status === "active");
+}
+
+export function latestDraft(store: FoundationStore, organizationId: string, siteId: string) {
+  const site = readSite(store, organizationId, siteId);
+
+  if (!site.ok) {
+    return site;
+  }
+
+  const revision = store.revisions.find(
+    (row) =>
+      row.siteId === site.site.id &&
+      row.organizationId === organizationId &&
+      row.version === site.site.draftVersion,
+  );
+
+  if (!revision) {
+    return { ok: false as const, reason: "not_found" as const };
+  }
+
+  return { ok: true as const, site: site.site, revision };
+}
+
+export function syncPagesFromSnapshot(store: FoundationStore, organizationId: string, siteId: string, snapshot: SiteSnapshot) {
+  const site = siteForOrg(store, organizationId, siteId);
+
+  if (!site) {
+    return;
+  }
+
+  const seen = new Set<string>();
+
+  for (const page of snapshot.pages) {
+    seen.add(page.id);
+    const existing = store.pages.find((row) => row.id === page.id && row.organizationId === organizationId);
+
+    if (existing) {
+      existing.title = page.title;
+      existing.slug = page.slug;
+      existing.sortOrder = page.sortOrder;
+      existing.navigationVisible = page.navigationVisible;
+      existing.homepage = page.homepage;
+      existing.status = "active";
+      continue;
+    }
+
+    store.pages.push({
+      id: page.id,
+      organizationId,
+      siteId,
+      title: page.title,
+      slug: page.slug,
+      status: "active",
+      navigationVisible: page.navigationVisible,
+      sortOrder: page.sortOrder,
+      homepage: page.homepage,
+    });
+  }
+
+  for (const page of store.pages) {
+    if (page.siteId === siteId && page.organizationId === organizationId && !seen.has(page.id)) {
+      page.status = "archived";
+    }
+  }
+
+  const homepage = snapshot.pages.find((page) => page.homepage);
+  site.homepagePageId = homepage?.id ?? null;
+}
+
+export function listAssets(store: FoundationStore, organizationId: string, siteId: string) {
+  return store.assets.filter(
+    (asset) => asset.organizationId === organizationId && asset.siteId === siteId && asset.status === "active",
+  );
+}
+
+export function latestPublication(store: FoundationStore, organizationId: string, siteId: string) {
+  const rows = store.publications.filter((row) => row.organizationId === organizationId && row.siteId === siteId);
+  return rows.at(-1) ?? null;
 }
 
 export function importTemplate(input: { snapshot: SiteSnapshot; customJs?: string }) {

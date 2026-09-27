@@ -2,11 +2,14 @@
 
 Local website-builder and publication foundation for the LumiSolutions platform.
 
-This repository does not yet contain a visual editor, a database, or a deployment. The Orbia contract and the DripForge migration boundary are in `docs/crevia-product-contract.md` and `docs/crevia-dripforge-migration.md`.
+The Wave 7A foundation plus a local visual editor. There is still no database, cloud publish target, or Orbia call. See `docs/crevia-product-contract.md`, `docs/crevia-builder.md`, and `docs/crevia-dripforge-migration.md`.
 
 ```bash
+CREVIA_APP_ENV=LOCAL CREVIA_PROVISIONING_KEY=local-fixture-key npm start
 npm test
 npm run typecheck
 npm run lint
 npm run build
 ```
+
+Local fixture UI: `POST /api/dev/fixture`, then `/app`.

@@ -2,7 +2,7 @@
 
 Wave 7A prepares the local product foundation. It does not call LumiOrbia, does not create a platform organization, and does not deploy Crevia.
 
-The canonical Git line before this branch was `main` at `fffa683cbe51924278aee44fd8eb510e292370f7`, an empty README. No other branch, builder, database, or deployment existed in `LumiSolutions/LumiCrevia`. This contract describes the foundation added on `cursor/crevia-orbia-foundation-6e03`. It does not claim a visual editor.
+The canonical Git line before this branch was `main` at `fffa683cbe51924278aee44fd8eb510e292370f7`, an empty README. Wave 7A added the foundation on `cursor/crevia-orbia-foundation-6e03`. Wave 7B adds a local visual editor on that same contract. It does not add a database, cloud publish target, or Orbia call.
 
 ## Purpose
 
@@ -103,7 +103,7 @@ Server gates that exist in this repository are `available`. Surfaces that do not
 | `crevia.domains` | available | yes |
 | `crevia.templates` | planned | no |
 
-`crevia.builder` gates draft saves. It is not a canvas. There is no drag-and-drop implementation in this repository.
+`crevia.builder` gates draft saves. Wave 7B adds a local canvas, drag-and-drop, and a client undo stack. Those UI features still save only through `saveDraft`.
 
 Gates are server-side. Builder off denies draft writes. Assets off denies asset create and archive. Publishing off denies publish. Domains off denies hostname writes. Themes off denies theme writes. Sites off denies site create and archive.
 
@@ -118,7 +118,7 @@ Page index rows carry `id`, `siteId`, `organizationId`, `title`, `slug`, `status
 The editable document is a JSON snapshot on a site revision, not a normalized block table. A page snapshot contains SEO metadata and a nested block tree. A block is:
 
 - `id`
-- `type` (`section`, `text`, `media`, `navigation`)
+- `type` (`section`, `text`, `media`, `navigation`, `button`, `container`)
 - `version`
 - `props`
 - `styles`
@@ -138,7 +138,7 @@ Server-side `inspectSnapshot` rejects the save when the document is invalid. Cli
 
 A save sends `expectedVersion`. The matching draft version increments and stores a cloned snapshot. A stale expected version returns a conflict (`409` on the result). The save does not create a publication.
 
-There is no client undo stack. An editor history would not replace these revisions.
+A client undo stack exists in the visual editor. It does not replace these revisions.
 
 ## Publishing
 

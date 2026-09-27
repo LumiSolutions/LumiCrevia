@@ -1,7 +1,8 @@
 import { createServer } from "node:http";
 
 import { createOrbiaExchangeClient, createSessionStore } from "./identity.js";
-import { handleRequest, type ServerDeps } from "./http.js";
+import { handleRequest } from "./http.js";
+import type { ServerDeps } from "./http-types.js";
 import { createFoundationStore } from "./store.js";
 
 function env(name: string): string {
@@ -16,7 +17,7 @@ export function serverDepsFromEnv(): ServerDeps {
     store: createFoundationStore(),
     sessions: createSessionStore(),
     controlPlane: createOrbiaExchangeClient(),
-    provisioningKey: env("CREVIA_PROVISIONING_KEY"),
+    provisioningKey: env("CREVIA_PROVISIONING_KEY") || (appEnv === "LOCAL" || appEnv === "TEST" ? "local-fixture-key" : ""),
     clientId: env("CREVIA_ORBIA_CLIENT_ID"),
     clientSecret: env("CREVIA_ORBIA_CLIENT_SECRET"),
     identityMode,
@@ -61,6 +62,13 @@ export function createCreviaServer(deps: ServerDeps) {
     );
 
     response.writeHead(result.status, result.headers);
+    const type = result.headers["content-type"] ?? "";
+
+    if (type.includes("text/html") || type.includes("text/css") || type.includes("javascript") || type.startsWith("image/")) {
+      response.end(result.body as string | Buffer);
+      return;
+    }
+
     response.end(JSON.stringify(result.body));
   });
 }

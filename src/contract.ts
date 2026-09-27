@@ -50,8 +50,8 @@ export type ModuleDescriptor = {
 
 /**
  * Derived from this repository.
- * There is no builder canvas, so dashboard and templates stay planned.
- * The other keys have server gates even though no editor UI exists yet.
+ * Dashboard and templates stay planned.
+ * Builder now has a local visual editor. The other keys keep server gates.
  * None of these keys are activated in the Orbia catalog by this wave.
  */
 export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
@@ -85,7 +85,7 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     availability: "available",
     serverGate: true,
     orbiaCatalogToday: false,
-    notes: "Draft save gate. No canvas, drag-and-drop, or undo stack is implemented.",
+    notes: "Draft save gate plus the local visual editor. Undo is client-side only.",
   },
   {
     key: "crevia.assets",
@@ -218,6 +218,8 @@ export const BLOCK_SCHEMA: Record<string, readonly number[]> = {
   text: [1],
   media: [1],
   navigation: [1],
+  button: [1],
+  container: [1],
 };
 
 export const BREAKPOINTS = ["desktop", "tablet", "mobile"] as const;
