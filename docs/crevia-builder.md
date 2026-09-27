@@ -1,6 +1,6 @@
 # Crevia visual builder
 
-Wave 7B adds a local visual editor on the Wave 7A foundation. The editor does not own a second document store. Every save goes through `inspectSnapshot` and `saveDraft(expectedVersion)`.
+Wave 7B adds a local visual editor on the Wave 7A foundation. Wave 7C keeps that editor and routes every save through `inspectSnapshot` and `saveDraft(expectedVersion)` into PostgreSQL. The editor does not own a second document store and does not import Prisma.
 
 ## Editor architecture
 

@@ -55,6 +55,7 @@ export type StoredSession = ProductContext & {
   id: string;
   tokenHash: string;
   expiresAt: string;
+  createdAt?: string;
   revokedAt: string | null;
 };
 
@@ -179,23 +180,27 @@ export function createOrbiaExchangeClient(): ControlPlane {
   };
 }
 
-export function createSessionStore() {
+export type SessionStore = {
+  save(session: StoredSession): Promise<void>;
+  find(token: string): Promise<StoredSession | null>;
+  values(): Promise<StoredSession[]>;
+};
+
+export function createSessionStore(): SessionStore {
   const sessions = new Map<string, StoredSession>();
 
   return {
-    save(session: StoredSession) {
+    async save(session: StoredSession) {
       sessions.set(session.tokenHash, session);
     },
-    find(token: string) {
+    async find(token: string) {
       return sessions.get(hashToken(token)) ?? null;
     },
-    values() {
+    async values() {
       return [...sessions.values()];
     },
   };
 }
-
-export type SessionStore = ReturnType<typeof createSessionStore>;
 
 function publicContext(session: StoredSession): ProductContext {
   return {
@@ -269,9 +274,10 @@ export async function completeCallback(input: {
     modules,
     evaluatedAt: grant.evaluatedAt,
     expiresAt: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
+    createdAt: now.toISOString(),
     revokedAt: null,
   };
-  input.sessions.save(session);
+  await input.sessions.save(session);
 
   return {
     ok: true as const,
@@ -302,7 +308,7 @@ function parseCookies(header: string): Map<string, string> {
   return cookies;
 }
 
-export function openLocalSession(input: {
+export async function openLocalSession(input: {
   sessions: SessionStore;
   appEnv: string;
   orbiaUserId: string;
@@ -329,9 +335,10 @@ export function openLocalSession(input: {
     modules: input.modules,
     evaluatedAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
+    createdAt: now.toISOString(),
     revokedAt: null,
   };
-  input.sessions.save(session);
+  await input.sessions.save(session);
 
   return {
     ok: true as const,
@@ -341,7 +348,7 @@ export function openLocalSession(input: {
   };
 }
 
-export function authenticateLocalSession(input: {
+export async function authenticateLocalSession(input: {
   cookieHeader: string;
   appEnv: string;
   sessions: SessionStore;
@@ -358,7 +365,7 @@ export function authenticateLocalSession(input: {
     return { ok: false as const, reason: "no_session" as const };
   }
 
-  const session = input.sessions.find(product);
+  const session = await input.sessions.find(product);
 
   if (!session || session.revokedAt) {
     return { ok: false as const, reason: "no_session" as const };
@@ -371,7 +378,7 @@ export function authenticateLocalSession(input: {
   return { ok: true as const, context: publicContext(session) };
 }
 
-export function authenticateProductRequest(input: {
+export async function authenticateProductRequest(input: {
   cookieHeader: string;
   mode: CreviaIdentityMode;
   sessions: SessionStore;
@@ -393,7 +400,7 @@ export function authenticateProductRequest(input: {
     return { ok: false as const, reason: "orbia_mode_required" as const };
   }
 
-  const session = input.sessions.find(product);
+  const session = await input.sessions.find(product);
 
   if (!session || session.revokedAt) {
     return { ok: false as const, reason: "no_session" as const };

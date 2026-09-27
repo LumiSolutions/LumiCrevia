@@ -18,6 +18,7 @@ import {
   resolveDevActor,
   type ExchangeGrant,
 } from "../src/identity.ts";
+import { createMemoryServerDeps } from "../src/deps.ts";
 import { evaluateReadiness, healthReport } from "../src/readiness.ts";
 import { serverDepsFromEnv } from "../src/server.ts";
 import {
@@ -606,7 +607,7 @@ describe("identity", () => {
     assert.match(opened.cookie, /HttpOnly/);
     assert.match(opened.cookie, /SameSite=Lax/);
     assert.match(opened.cookie, /Secure/);
-    assert.equal(JSON.stringify(sessions.values()).includes(opened.token), false);
+    assert.equal(JSON.stringify(await sessions.values()).includes(opened.token), false);
     assert.deepEqual(opened.context, {
       orbiaUserId: "user_fixture",
       orbiaOrganizationId: "org_fixture_a",
@@ -685,7 +686,7 @@ describe("identity", () => {
       password: "second-password",
     });
     assert.deepEqual(refused, { ok: false, reason: "password_fallback_forbidden" });
-    assert.equal(sessions.values().length, 0);
+    assert.equal((await sessions.values()).length, 0);
     assert.deepEqual(identityLookupKey({ orbiaUserId: "user_1", email: "person@example.test" }), {
       orbiaUserId: "user_1",
     });
@@ -714,7 +715,7 @@ describe("identity", () => {
     if (!opened.ok) {
       return;
     }
-    const foreign = authenticateProductRequest({
+    const foreign = await authenticateProductRequest({
       cookieHeader: `orbia_session=${opened.token}`,
       mode: "orbia",
       sessions,
@@ -776,17 +777,17 @@ describe("http", () => {
     const store = createFoundationStore();
     const sessions = createSessionStore();
     const plane = createMemoryControlPlane({ clientId: CLIENT_ID, clientSecret: CLIENT_SECRET });
-    const deps = {
+    const deps = createMemoryServerDeps({
       store,
       sessions,
-      controlPlane: plane,
       provisioningKey: PROVISIONING_KEY,
       clientId: CLIENT_ID,
       clientSecret: CLIENT_SECRET,
-      identityMode: "orbia" as const,
+      identityMode: "orbia",
       appEnv: "TEST",
       secureCookies: true,
-    };
+    });
+    deps.controlPlane = plane;
     const health = await handleRequest({ method: "GET", path: "/api/health", headers: {} }, deps);
     assert.equal(health.status, 200);
     assert.equal(JSON.stringify(health.body).includes(PROVISIONING_KEY), false);
@@ -815,17 +816,17 @@ describe("http", () => {
     const store = createFoundationStore();
     const sessions = createSessionStore();
     const plane = createMemoryControlPlane({ clientId: CLIENT_ID, clientSecret: CLIENT_SECRET });
-    const deps = {
+    const deps = createMemoryServerDeps({
       store,
       sessions,
-      controlPlane: plane,
       provisioningKey: PROVISIONING_KEY,
       clientId: CLIENT_ID,
       clientSecret: CLIENT_SECRET,
-      identityMode: "orbia" as const,
+      identityMode: "orbia",
       appEnv: "TEST",
       secureCookies: true,
-    };
+    });
+    deps.controlPlane = plane;
     const provision = await handleRequest(
       {
         method: "POST",
@@ -868,13 +869,19 @@ describe("process start", () => {
   it("fails closed when production-like mode is not orbia", () => {
     const previousEnv = process.env.CREVIA_APP_ENV;
     const previousMode = process.env.CREVIA_IDENTITY_MODE;
+    const previousUrl = process.env.DATABASE_URL;
+    const previousStorage = process.env.CREVIA_ASSET_STORAGE_PATH;
     process.env.CREVIA_APP_ENV = "production";
     process.env.CREVIA_IDENTITY_MODE = "dev";
+    process.env.DATABASE_URL = "postgresql://crevia:crevia_local_only@127.0.0.1:5432/crevia_local";
+    process.env.CREVIA_ASSET_STORAGE_PATH = `${process.cwd()}/var/crevia-assets`;
     const deps = serverDepsFromEnv();
     assert.equal(deps.identityMode, "dev");
     assert.equal(deps.appEnv, "production");
     assert.equal(deps.secureCookies, true);
     process.env.CREVIA_APP_ENV = previousEnv;
     process.env.CREVIA_IDENTITY_MODE = previousMode;
+    process.env.DATABASE_URL = previousUrl;
+    process.env.CREVIA_ASSET_STORAGE_PATH = previousStorage;
   });
 });

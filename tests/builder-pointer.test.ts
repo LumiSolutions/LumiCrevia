@@ -5,9 +5,8 @@ import { describe, it } from "node:test";
 import { createBlock } from "../src/builder/blocks.ts";
 import { resolvePointerDrop } from "../src/builder/dnd.ts";
 import { moveBlock } from "../src/builder/tree.ts";
+import { createMemoryServerDeps } from "../src/deps.ts";
 import { handleRequest } from "../src/http.ts";
-import { createSessionStore } from "../src/identity.ts";
-import { createFoundationStore } from "../src/store.ts";
 import type { ServerDeps } from "../src/http-types.ts";
 
 describe("pointer drag and drop", () => {
@@ -38,17 +37,14 @@ describe("pointer drag and drop", () => {
   });
 
   it("activates a real HTTP builder session used by the canvas", async () => {
-    const deps: ServerDeps = {
-      store: createFoundationStore(),
-      sessions: createSessionStore(),
-      controlPlane: { async exchange() { return { ok: false as const, reason: "live_orbia_disabled" as const }; } },
+    const deps: ServerDeps = createMemoryServerDeps({
       provisioningKey: "local-fixture-key",
       clientId: "c",
       clientSecret: "s",
       identityMode: "dev",
       appEnv: "TEST",
       secureCookies: false,
-    };
+    });
     const server = createServer(async (request, response) => {
       const result = await handleRequest(
         { method: request.method ?? "GET", path: request.url ?? "/", headers: { cookie: request.headers.cookie } },

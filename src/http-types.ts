@@ -1,5 +1,6 @@
 import type { ControlPlane, SessionStore } from "./identity.js";
-import type { FoundationStore } from "./store.js";
+import type { FoundationRepository } from "./repository.js";
+import type { AssetStorage } from "./storage.js";
 
 export type HttpResponse = {
   status: number;
@@ -8,8 +9,9 @@ export type HttpResponse = {
 };
 
 export type ServerDeps = {
-  store: FoundationStore;
+  repository: FoundationRepository;
   sessions: SessionStore;
+  storage: AssetStorage;
   controlPlane: ControlPlane;
   provisioningKey: string;
   clientId: string;

@@ -15,13 +15,11 @@ import { BUILDER_MODULES, createBuilderFixture } from "../src/builder/fixtures.t
 import { addPage, archivePageInSnapshot, duplicatePage, pageById, renamePage } from "../src/builder/pages.ts";
 import { pageFromSnapshot, renderPage } from "../src/builder/render.ts";
 import { canDrop, insertBlock, moveBlock, removeBlock } from "../src/builder/tree.ts";
+import { createMemoryServerDeps } from "../src/deps.ts";
 import { handleRequest } from "../src/http.ts";
-import { createSessionStore } from "../src/identity.ts";
 import {
   createFoundationStore,
-  createSite,
   latestDraft,
-  provisionOrganization,
   publishSite,
   publicPublishedRender,
   saveDraft,
@@ -31,17 +29,15 @@ import type { ServerDeps } from "../src/http-types.ts";
 const KEY = "local-fixture-key";
 
 function deps(store = createFoundationStore()): ServerDeps {
-  return {
+  return createMemoryServerDeps({
     store,
-    sessions: createSessionStore(),
-    controlPlane: { async exchange() { return { ok: false as const, reason: "live_orbia_disabled" as const }; } },
     provisioningKey: KEY,
     clientId: "crevia-client",
     clientSecret: "secret",
     identityMode: "dev",
     appEnv: "TEST",
     secureCookies: false,
-  };
+  });
 }
 
 async function fixtureSession() {
@@ -284,8 +280,7 @@ describe("builder http", () => {
     const loaded = await handleRequest({ method: "GET", path: `/api/sites/${siteId}`, headers: { cookie } }, server);
     assert.equal(loaded.status, 200);
 
-    const other = createFoundationStore();
-    const foreignOrg = provisionOrganization(other, {
+    const foreignOrg = await server.repository.provisionOrganization({
       provisioningKey: KEY,
       expectedKey: KEY,
       action: "enable",
@@ -295,7 +290,7 @@ describe("builder http", () => {
     if (!foreignOrg.ok) {
       return;
     }
-    const foreignSite = createSite(other, {
+    const foreignSite = await server.repository.createSite({
       organizationId: foreignOrg.localOrganizationId,
       name: "Other",
       createdBy: "x",
@@ -306,7 +301,6 @@ describe("builder http", () => {
       return;
     }
 
-    server.store.sites.push(foreignSite.site);
     const denied = await handleRequest(
       { method: "GET", path: `/api/sites/${foreignSite.site.id}`, headers: { cookie } },
       server,

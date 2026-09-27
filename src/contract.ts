@@ -7,6 +7,7 @@ export const CREVIA_APP_KEY = "crevia";
 export const CREVIA_SESSION_COOKIE = "crevia_session";
 export const ORBIA_SESSION_COOKIE = "orbia_session";
 export const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+export const PREVIEW_TTL_MS = 8 * 60 * 60 * 1000;
 export const CODE_TTL_MS = 90_000;
 
 export type CreviaIdentityMode = "dev" | "orbia";
@@ -93,7 +94,7 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     availability: "available",
     serverGate: true,
     orbiaCatalogToday: false,
-    notes: "Website asset references. Bytes are not stored in this wave.",
+    notes: "Website asset metadata plus local durable bytes for Crevia uploads.",
   },
   {
     key: "crevia.themes",

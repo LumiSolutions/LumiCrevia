@@ -1,6 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 
 import type { CreviaModuleKey } from "./contract.js";
+import { PREVIEW_TTL_MS } from "./contract.js";
 import { hashToken } from "./identity.js";
 import { emptySnapshot, inspectSnapshot, type SiteSnapshot } from "./validation.js";
 
@@ -16,6 +17,8 @@ export type ProductOrganization = {
   assets: number;
   themes: number;
   users: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type SiteRecord = {
@@ -27,6 +30,7 @@ export type SiteRecord = {
   draftVersion: number;
   publishedRevisionId: string | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type PageRecord = {
@@ -39,6 +43,8 @@ export type PageRecord = {
   navigationVisible: boolean;
   sortOrder: number;
   homepage: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type SiteRevision = {
@@ -91,6 +97,12 @@ export type AssetRecord = {
   externalAssetId: string | null;
   displayName: string;
   status: "active" | "archived";
+  filename: string | null;
+  mimeType: string | null;
+  size: number | null;
+  storageKey: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type ThemeRecord = {
@@ -106,6 +118,8 @@ export type PreviewToken = {
   siteId: string;
   revisionId: string;
   kind: "editor" | "draft" | "published";
+  expiresAt: string;
+  createdAt: string;
 };
 
 export type FoundationStore = {
@@ -154,6 +168,7 @@ function id(prefix: string): string {
 }
 
 function emptyOrganization(orbiaOrganizationId: string, displayName: string): ProductOrganization {
+  const now = new Date().toISOString();
   return {
     id: id("corg"),
     orbiaOrganizationId,
@@ -164,6 +179,8 @@ function emptyOrganization(orbiaOrganizationId: string, displayName: string): Pr
     assets: 0,
     themes: 0,
     users: 0,
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
@@ -211,6 +228,7 @@ export function provisionOrganization(
     }
 
     existing.access = "disabled";
+    existing.updatedAt = new Date().toISOString();
     return {
       ok: true as const,
       localOrganizationId: existing.id,
@@ -223,6 +241,7 @@ export function provisionOrganization(
 
   if (existing) {
     existing.access = "active";
+    existing.updatedAt = new Date().toISOString();
     return {
       ok: true as const,
       localOrganizationId: existing.id,
@@ -308,6 +327,7 @@ export function createSite(
     draftVersion: 1,
     publishedRevisionId: null,
     createdAt: now,
+    updatedAt: now,
   };
   const revision: SiteRevision = {
     revisionId: id("rev"),
@@ -409,6 +429,8 @@ export function createPage(
     navigationVisible: input.navigationVisible,
     sortOrder: input.sortOrder,
     homepage: input.homepage === true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
   store.pages.push(page);
 
@@ -605,12 +627,15 @@ export function issuePreviewToken(
   }
 
   const token = randomBytes(24).toString("base64url");
+  const now = new Date();
   store.previews.push({
     tokenHash: hashToken(token),
     organizationId: input.organizationId,
     siteId: input.siteId,
     revisionId: input.revisionId,
     kind: input.kind,
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + PREVIEW_TTL_MS).toISOString(),
   });
   return { ok: true as const, token };
 }
@@ -619,6 +644,10 @@ export function readPreview(store: FoundationStore, input: { token: string; orga
   const match = store.previews.find((row) => row.tokenHash === hashToken(input.token));
 
   if (!match || match.organizationId !== input.organizationId) {
+    return { ok: false as const, reason: "not_found" as const };
+  }
+
+  if (Date.parse(match.expiresAt) <= Date.now()) {
     return { ok: false as const, reason: "not_found" as const };
   }
 
@@ -665,6 +694,10 @@ export function saveAsset(
     externalAssetId: string | null;
     displayName: string;
     modules: readonly CreviaModuleKey[];
+    filename?: string | null;
+    mimeType?: string | null;
+    size?: number | null;
+    storageKey?: string | null;
   },
 ) {
   if (!input.modules.includes("crevia.assets")) {
@@ -696,6 +729,12 @@ export function saveAsset(
     externalAssetId: input.externalAssetId,
     displayName: input.displayName,
     status: "active",
+    filename: input.filename ?? null,
+    mimeType: input.mimeType ?? null,
+    size: input.size ?? null,
+    storageKey: input.storageKey ?? null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
   store.assets.push(asset);
   const organization = store.organizations.find((row) => row.id === input.organizationId);
@@ -888,6 +927,7 @@ export function syncPagesFromSnapshot(store: FoundationStore, organizationId: st
       existing.navigationVisible = page.navigationVisible;
       existing.homepage = page.homepage;
       existing.status = "active";
+      existing.updatedAt = new Date().toISOString();
       continue;
     }
 
@@ -901,6 +941,8 @@ export function syncPagesFromSnapshot(store: FoundationStore, organizationId: st
       navigationVisible: page.navigationVisible,
       sortOrder: page.sortOrder,
       homepage: page.homepage,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     });
   }
 

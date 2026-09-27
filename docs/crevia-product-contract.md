@@ -2,7 +2,7 @@
 
 Wave 7A prepares the local product foundation. It does not call LumiOrbia, does not create a platform organization, and does not deploy Crevia.
 
-The canonical Git line before this branch was `main` at `fffa683cbe51924278aee44fd8eb510e292370f7`, an empty README. Wave 7A added the foundation on `cursor/crevia-orbia-foundation-6e03`. Wave 7B adds a local visual editor on that same contract. It does not add a database, cloud publish target, or Orbia call.
+The canonical Git line before this branch was `main` at `fffa683cbe51924278aee44fd8eb510e292370f7`, an empty README. Wave 7A added the foundation on `cursor/crevia-orbia-foundation-6e03`. Wave 7B adds a local visual editor on that same contract. Wave 7C adds local PostgreSQL persistence and filesystem asset bytes. It does not add a cloud publish target or an Orbia call.
 
 ## Purpose
 
@@ -155,7 +155,7 @@ Classifications:
 - `COMMERCE_ASSET_REFERENCE`
 - `PLATFORM_BRANDING_REFERENCE`
 
-External assets store `sourceSystem` and `externalAssetId` plus display metadata. This wave stores no bytes. Storage readiness stays degraded.
+External assets store `sourceSystem` and `externalAssetId` plus display metadata. Crevia uploads store local bytes through `AssetStorage`. Cloud blob storage is not implemented in this wave.
 
 ## Themes
 
@@ -171,13 +171,13 @@ Disable sets `access` to `disabled` and blocks new site writes. Existing rows re
 
 ## Health
 
-`GET /api/health` reports the process only. It does not print secrets, database URLs, or keys.
+`GET /api/health` reports process, database, and assetStorage. It does not print secrets, database URLs, or keys.
 
-`GET /api/readiness` reports persistence, storage, identity, provisioning, migration, publishing, and builder. A missing publishing target leaves publishing `degraded` and builder `ready`. Orbia mode without client id and secret, or dev mode in production, fails identity closed.
+`GET /api/readiness` reports persistence, database, storage, identity, provisioning, migration, publishing, and builder. A missing publishing target leaves publishing `degraded` and builder `ready` when the database is up. Orbia mode without client id and secret, or dev mode in production, fails identity closed.
 
 ## Persistence
 
-The foundation store is in memory and is created empty for each process. There is no Prisma schema, no SQLite file, no PostgreSQL database, and no blob container. Cloud multi-tenant hosting still needs a durable organization-scoped database and an asset store. That choice is not made in this wave.
+Local runtime uses PostgreSQL through Prisma migrations and a repository boundary. The memory store remains a unit-test adapter. Sessions and preview tokens persist as hashes. See `docs/crevia-persistence.md`. Cloud hosting is still out of scope.
 
 ## DripForge boundary
 

@@ -1,8 +1,7 @@
 import { handleBuilderRequest } from "./builder-http.js";
 import { CREVIA_APP_KEY } from "./contract.js";
 import { authenticateLocalSession, authenticateProductRequest, completeCallback } from "./identity.js";
-import { evaluateReadiness, healthReport } from "./readiness.js";
-import { findOrganizationByOrbiaId, provisionOrganization } from "./store.js";
+import { checkStateFromHealth, evaluateReadiness, healthReport } from "./readiness.js";
 import type { HttpResponse, ServerDeps } from "./http-types.js";
 
 export type { HttpResponse, ServerDeps } from "./http-types.js";
@@ -15,6 +14,13 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
   };
 }
 
+async function persistenceChecks(deps: ServerDeps) {
+  const database = await deps.repository.health();
+  const storage = await deps.storage.health();
+  const migration = await deps.repository.migrationHealth();
+  return { database, storage, migration };
+}
+
 export async function handleRequest(
   input: { method: string; path: string; headers: Record<string, string | undefined>; body?: unknown },
   deps: ServerDeps,
@@ -22,16 +28,27 @@ export async function handleRequest(
   const path = input.path.split("?")[0] ?? input.path;
 
   if (input.method === "GET" && path === "/api/health") {
-    return json(200, healthReport());
+    const checks = await persistenceChecks(deps);
+    return json(
+      200,
+      healthReport({
+        database: checks.database.ok ? "ok" : "down",
+        assetStorage: checks.storage.ok ? "ok" : "down",
+      }),
+    );
   }
 
   if (input.method === "GET" && path === "/api/readiness") {
+    const checks = await persistenceChecks(deps);
     const report = evaluateReadiness({
       identityMode: deps.identityMode,
       appEnv: deps.appEnv,
       clientId: deps.clientId,
       clientSecret: deps.clientSecret,
       provisioningKey: deps.provisioningKey,
+      persistence: checkStateFromHealth(checks.database.ok),
+      storage: checkStateFromHealth(checks.storage.ok),
+      migration: checkStateFromHealth(checks.migration.ok),
     });
     return json(report.status === "not_ready" ? 503 : 200, report);
   }
@@ -41,7 +58,7 @@ export async function handleRequest(
     const code = url.searchParams.get("code") ?? "";
     const password = url.searchParams.get("password") ?? undefined;
     const organizationId = url.searchParams.get("creviaOrganizationId") ?? "";
-    const organization = deps.store.organizations.find((row) => row.id === organizationId);
+    const organization = await deps.repository.findOrganizationById(organizationId);
 
     if (!organization || organization.access !== "active") {
       return json(403, { ok: false, reason: "unknown_organization" });
@@ -62,11 +79,7 @@ export async function handleRequest(
       return json(401, { ok: false, reason: opened.reason });
     }
 
-    return json(
-      200,
-      { ok: true, context: opened.context },
-      { "set-cookie": opened.cookie },
-    );
+    return json(200, { ok: true, context: opened.context }, { "set-cookie": opened.cookie });
   }
 
   if (input.method === "POST" && path === "/api/internal/orbia/provision") {
@@ -76,7 +89,7 @@ export async function handleRequest(
       orbiaOrganizationId?: string;
       displayName?: string;
     };
-    const result = provisionOrganization(deps.store, {
+    const result = await deps.repository.provisionOrganization({
       provisioningKey: header,
       expectedKey: deps.provisioningKey,
       action: body.action ?? "enable",
@@ -99,14 +112,14 @@ export async function handleRequest(
 
   if (input.method === "GET" && path === "/api/session") {
     const cookie = input.headers.cookie ?? "";
-    const local = authenticateLocalSession({
+    const local = await authenticateLocalSession({
       cookieHeader: cookie,
       appEnv: deps.appEnv,
       sessions: deps.sessions,
     });
     const session = local.ok
       ? local
-      : authenticateProductRequest({
+      : await authenticateProductRequest({
           cookieHeader: cookie,
           mode: deps.identityMode,
           sessions: deps.sessions,
@@ -116,7 +129,7 @@ export async function handleRequest(
       return json(401, session);
     }
 
-    const organization = findOrganizationByOrbiaId(deps.store, session.context.orbiaOrganizationId);
+    const organization = await deps.repository.findOrganizationByOrbiaId(session.context.orbiaOrganizationId);
 
     if (!organization || organization.id !== session.context.creviaOrganizationId) {
       return json(403, { ok: false, reason: "organization_mismatch" });

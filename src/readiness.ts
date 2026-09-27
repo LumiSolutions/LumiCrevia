@@ -10,6 +10,7 @@ export type ReadinessReport = {
     migration: CheckState;
     publishing: CheckState;
     builder: CheckState;
+    database: CheckState;
   };
 };
 
@@ -19,6 +20,9 @@ export function evaluateReadiness(input: {
   clientId: string;
   clientSecret: string;
   provisioningKey: string;
+  persistence?: CheckState;
+  storage?: CheckState;
+  migration?: CheckState;
 }): ReadinessReport {
   const productionLike = input.appEnv === "staging" || input.appEnv === "production";
   const identityConfigured = Boolean(input.clientId && input.clientSecret);
@@ -33,14 +37,19 @@ export function evaluateReadiness(input: {
   }
 
   const publishing: CheckState = "degraded";
-  const storage: CheckState = "degraded";
-  const persistence: CheckState = "ready";
-  const migration: CheckState = "ready";
+  const persistence: CheckState = input.persistence ?? "ready";
+  const storage: CheckState = input.storage ?? "ready";
+  const migration: CheckState = input.migration ?? "ready";
   const provisioning: CheckState = provisioningConfigured ? "ready" : "missing";
   const builder: CheckState = persistence === "ready" ? "ready" : "missing";
+  const database: CheckState = persistence;
 
   const core = [persistence, identity, provisioning, migration];
-  const status = core.includes("missing") ? "not_ready" : publishing === "degraded" || storage === "degraded" ? "degraded" : "ready";
+  const status = core.includes("missing")
+    ? "not_ready"
+    : publishing === "degraded" || storage === "degraded" || storage === "missing"
+      ? "degraded"
+      : "ready";
 
   return {
     status,
@@ -52,16 +61,27 @@ export function evaluateReadiness(input: {
       migration,
       publishing,
       builder,
+      database,
     },
   };
 }
 
-export function healthReport() {
+export function healthReport(input?: { database?: "ok" | "down"; assetStorage?: "ok" | "down" }) {
+  const database = input?.database ?? "ok";
+  const assetStorage = input?.assetStorage ?? "ok";
+  const status = database === "ok" && assetStorage === "ok" ? ("ok" as const) : ("degraded" as const);
+
   return {
-    status: "ok" as const,
+    status,
     service: "lumicrevia",
     checks: {
       process: "ok" as const,
+      database,
+      assetStorage,
     },
   };
+}
+
+export function checkStateFromHealth(ok: boolean): CheckState {
+  return ok ? "ready" : "missing";
 }

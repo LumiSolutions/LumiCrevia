@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ProductOrganization {
+  id                  String            @id
+  orbiaOrganizationId String            @unique
+  displayName         String
+  accessStatus        String
+  createdAt           DateTime
+  updatedAt           DateTime
+  sites               Site[]
+  pages               Page[]
+  revisions           SiteRevision[]
+  publications        Publication[]
+  domains             Domain[]
+  assets              Asset[]
+  themes              Theme[]
+  previews            PreviewToken[]
+  sessions            ProductSession[]
+
+  @@index([orbiaOrganizationId])
+}
+
+model Site {
+  id                  String            @id
+  organizationId      String
+  organization        ProductOrganization @relation(fields: [organizationId], references: [id])
+  name                String
+  status              String
+  homepagePageId      String?
+  draftVersion        Int
+  publishedRevisionId String?
+  createdAt           DateTime
+  updatedAt           DateTime
+  pages               Page[]
+  revisions           SiteRevision[]
+  publications        Publication[]
+  domains             Domain[]
+  assets              Asset[]
+  themes              Theme[]
+  previews            PreviewToken[]
+
+  @@index([organizationId])
+}
+
+model Page {
+  id                String              @id
+  organizationId    String
+  organization      ProductOrganization @relation(fields: [organizationId], references: [id])
+  siteId            String
+  site              Site                @relation(fields: [siteId], references: [id])
+  title             String
+  slug              String
+  status            String
+  navigationVisible Boolean
+  sortOrder         Int
+  homepage          Boolean
+  createdAt         DateTime
+  updatedAt         DateTime
+
+  @@index([siteId])
+  @@index([organizationId])
+}
+
+model SiteRevision {
+  revisionId     String              @id
+  organizationId String
+  organization   ProductOrganization @relation(fields: [organizationId], references: [id])
+  siteId         String
+  site           Site                @relation(fields: [siteId], references: [id])
+  version        Int
+  status         String
+  snapshot       Json
+  createdAt      DateTime
+  createdBy      String
+
+  @@unique([siteId, version])
+  @@index([siteId, version])
+  @@index([organizationId])
+}
+
+model Publication {
+  id             String              @id
+  organizationId String
+  organization   ProductOrganization @relation(fields: [organizationId], references: [id])
+  siteId         String
+  site           Site                @relation(fields: [siteId], references: [id])
+  revisionId     String
+  target         String
+  status         String
+  createdAt      DateTime
+  completedAt    DateTime?
+  error          String?
+
+  @@index([siteId])
+  @@index([organizationId])
+}
+
+model Theme {
+  id             String              @id
+  organizationId String
+  organization   ProductOrganization @relation(fields: [organizationId], references: [id])
+  siteId         String
+  site           Site                @relation(fields: [siteId], references: [id])
+  tokens         Json
+  createdAt      DateTime
+  updatedAt      DateTime
+
+  @@unique([organizationId, siteId])
+  @@index([siteId])
+}
+
+model Asset {
+  id              String               @id
+  organizationId  String
+  organization    ProductOrganization  @relation(fields: [organizationId], references: [id])
+  siteId          String?
+  site            Site?                @relation(fields: [siteId], references: [id])
+  classification  String
+  sourceSystem    String?
+  externalAssetId String?
+  displayName     String
+  filename        String?
+  mimeType        String?
+  size            Int?
+  storageKey      String?
+  status          String
+  createdAt       DateTime
+  updatedAt       DateTime
+
+  @@index([organizationId])
+  @@index([siteId])
+}
+
+model Domain {
+  id                 String              @id
+  organizationId     String
+  organization       ProductOrganization @relation(fields: [organizationId], references: [id])
+  siteId             String
+  site               Site                @relation(fields: [siteId], references: [id])
+  hostname           String
+  verificationStatus String
+  sslStatus          String
+  publicationTarget  String?
+  createdAt          DateTime
+
+  @@index([siteId])
+  @@index([organizationId])
+}
+
+model PreviewToken {
+  id             String              @id
+  tokenHash      String              @unique
+  organizationId String
+  organization   ProductOrganization @relation(fields: [organizationId], references: [id])
+  siteId         String
+  site           Site                @relation(fields: [siteId], references: [id])
+  revisionId     String
+  kind           String
+  expiresAt      DateTime
+  createdAt      DateTime
+
+  @@index([tokenHash])
+}
+
+model ProductSession {
+  id                   String              @id
+  tokenHash            String              @unique
+  orbiaUserId          String
+  orbiaOrganizationId  String
+  creviaOrganizationId String
+  organization         ProductOrganization @relation(fields: [creviaOrganizationId], references: [id])
+  membershipRole       String
+  modules              Json
+  capabilities         Json
+  evaluatedAt          DateTime
+  expiresAt            DateTime
+  createdAt            DateTime
+  revokedAt            DateTime?
+
+  @@index([tokenHash])
+}

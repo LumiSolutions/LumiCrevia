@@ -1,29 +1,13 @@
 import { createServer } from "node:http";
 
-import { createOrbiaExchangeClient, createSessionStore } from "./identity.js";
+import { serverDepsFromEnv } from "./deps.js";
 import { handleRequest } from "./http.js";
 import type { ServerDeps } from "./http-types.js";
-import { createFoundationStore } from "./store.js";
+
+export { serverDepsFromEnv } from "./deps.js";
 
 function env(name: string): string {
   return process.env[name]?.trim() ?? "";
-}
-
-export function serverDepsFromEnv(): ServerDeps {
-  const appEnv = env("CREVIA_APP_ENV") || "LOCAL";
-  const identityMode = env("CREVIA_IDENTITY_MODE") === "orbia" ? "orbia" : "dev";
-
-  return {
-    store: createFoundationStore(),
-    sessions: createSessionStore(),
-    controlPlane: createOrbiaExchangeClient(),
-    provisioningKey: env("CREVIA_PROVISIONING_KEY") || (appEnv === "LOCAL" || appEnv === "TEST" ? "local-fixture-key" : ""),
-    clientId: env("CREVIA_ORBIA_CLIENT_ID"),
-    clientSecret: env("CREVIA_ORBIA_CLIENT_SECRET"),
-    identityMode,
-    appEnv,
-    secureCookies: appEnv === "staging" || appEnv === "production",
-  };
 }
 
 export function createCreviaServer(deps: ServerDeps) {
@@ -62,6 +46,12 @@ export function createCreviaServer(deps: ServerDeps) {
     );
 
     response.writeHead(result.status, result.headers);
+
+    if (Buffer.isBuffer(result.body)) {
+      response.end(result.body);
+      return;
+    }
+
     const type = result.headers["content-type"] ?? "";
 
     if (type.includes("text/html") || type.includes("text/css") || type.includes("javascript") || type.startsWith("image/")) {
