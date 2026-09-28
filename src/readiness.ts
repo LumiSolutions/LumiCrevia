@@ -24,6 +24,7 @@ export function evaluateReadiness(input: {
   clientId: string;
   clientSecret: string;
   provisioningKey: string;
+  orbiaBaseUrl?: string;
   persistence?: CheckState;
   storage?: CheckState;
   migration?: CheckState;
@@ -31,7 +32,9 @@ export function evaluateReadiness(input: {
 }): ReadinessReport {
   const productionLike = input.appEnv === "staging" || input.appEnv === "STAGING" || input.appEnv === "production";
   const identityConfigured = Boolean(input.clientId && input.clientSecret);
-  const provisioningConfigured = Boolean(input.provisioningKey);
+  const endpointKnown = input.orbiaBaseUrl === undefined || Boolean(input.orbiaBaseUrl);
+  const provisioningDistinct = !input.clientSecret || input.provisioningKey !== input.clientSecret;
+  const provisioningConfigured = Boolean(input.provisioningKey) && provisioningDistinct;
   const infrastructure = input.identityMode === "infrastructure";
 
   let identity: CheckState = "ready";
@@ -39,7 +42,7 @@ export function evaluateReadiness(input: {
   if (infrastructure) {
     identity = "skipped";
   } else if (input.identityMode === "orbia") {
-    identity = identityConfigured ? "ready" : "missing";
+    identity = identityConfigured && endpointKnown ? "ready" : "missing";
   } else if (productionLike) {
     identity = "missing";
   }

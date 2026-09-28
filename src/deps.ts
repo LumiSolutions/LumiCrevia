@@ -96,6 +96,7 @@ export function createMemoryServerDeps(input?: {
   identityMode?: CreviaIdentityMode;
   appEnv?: string;
   secureCookies?: boolean;
+  orbiaBaseUrl?: string;
 }): ServerDeps {
   const store = input?.store ?? createFoundationStore();
   const appEnv = input?.appEnv ?? "TEST";
@@ -105,13 +106,14 @@ export function createMemoryServerDeps(input?: {
     repository: createMemoryRepository(store, storage),
     sessions: input?.sessions ?? createSessionStore(),
     storage,
-    controlPlane: createOrbiaExchangeClient(),
+    controlPlane: createOrbiaExchangeClient({ baseUrl: input?.orbiaBaseUrl }),
     provisioningKey: input?.provisioningKey ?? "local-fixture-key",
     clientId: input?.clientId ?? "",
     clientSecret: input?.clientSecret ?? "",
     identityMode: input?.identityMode ?? "dev",
     appEnv,
     secureCookies: input?.secureCookies ?? false,
+    orbiaBaseUrl: input?.orbiaBaseUrl,
   };
 }
 
@@ -125,6 +127,7 @@ export function createPostgresServerDeps(input: {
   identityMode?: CreviaIdentityMode;
   appEnv?: string;
   secureCookies?: boolean;
+  orbiaBaseUrl?: string;
 }): ServerDeps {
   const appEnv = input.appEnv ?? "LOCAL";
   const storage = input.storage ?? createLocalFilesystemAssetStorage(resolveAssetStoragePath(appEnv));
@@ -134,13 +137,14 @@ export function createPostgresServerDeps(input: {
     repository,
     sessions: input.sessions ?? createPostgresSessionStore(input.prisma),
     storage,
-    controlPlane: createOrbiaExchangeClient(),
+    controlPlane: createOrbiaExchangeClient({ baseUrl: input.orbiaBaseUrl }),
     provisioningKey: input.provisioningKey ?? (appEnv === "LOCAL" || appEnv === "TEST" ? "local-fixture-key" : ""),
     clientId: input.clientId ?? "",
     clientSecret: input.clientSecret ?? "",
     identityMode: input.identityMode ?? "dev",
     appEnv,
     secureCookies: input.secureCookies ?? stagingLike(appEnv),
+    orbiaBaseUrl: input.orbiaBaseUrl,
   };
 }
 
@@ -155,15 +159,17 @@ export async function serverDepsFromEnv(): Promise<ServerDeps & { repository: Fo
 
   const prisma = createPrismaClient(databaseUrl);
   const storage = await createRuntimeAssetStorage(appEnv);
+  const orbiaBaseUrl = env("ORBIA_IDENTITY_BASE_URL");
 
   return createPostgresServerDeps({
     prisma,
     storage,
     provisioningKey: env("CREVIA_PROVISIONING_KEY") || (appEnv === "LOCAL" || appEnv === "TEST" ? "local-fixture-key" : ""),
-    clientId: env("CREVIA_ORBIA_CLIENT_ID"),
-    clientSecret: env("CREVIA_ORBIA_CLIENT_SECRET"),
+    clientId: env("CREVIA_IDENTITY_CLIENT_ID") || env("CREVIA_ORBIA_CLIENT_ID"),
+    clientSecret: env("CREVIA_IDENTITY_CLIENT_SECRET") || env("CREVIA_ORBIA_CLIENT_SECRET"),
     identityMode,
     appEnv,
     secureCookies: stagingLike(appEnv),
+    orbiaBaseUrl,
   });
 }

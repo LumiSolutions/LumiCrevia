@@ -20,4 +20,5 @@ export type ServerDeps = {
   identityMode: CreviaIdentityMode;
   appEnv: string;
   secureCookies: boolean;
+  orbiaBaseUrl?: string;
 };

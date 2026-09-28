@@ -68,7 +68,7 @@ export type ModuleDescriptor = {
   availability: ModuleAvailability;
   /** True when this repository enforces the key on the server. */
   serverGate: boolean;
-  /** Orbia catalog still lists only crevia.sites, and that entry stays planned. */
+  /** True when the Orbia catalog lists this key. Listing does not assign it. */
   orbiaCatalogToday: boolean;
   notes: string;
 };
@@ -85,8 +85,8 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     displayName: "Dashboard",
     availability: "planned",
     serverGate: false,
-    orbiaCatalogToday: false,
-    notes: "No dashboard surface exists in this repository.",
+    orbiaCatalogToday: true,
+    notes: "No dashboard surface exists in this repository. Orbia lists the key as planned.",
   },
   {
     key: "crevia.sites",
@@ -94,14 +94,14 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     availability: "available",
     serverGate: true,
     orbiaCatalogToday: true,
-    notes: "Site index and archive. Orbia still marks the catalog entry planned.",
+    notes: "Site index and archive. Orbia marks the catalog entry planned.",
   },
   {
     key: "crevia.pages",
     displayName: "Pages",
     availability: "available",
     serverGate: true,
-    orbiaCatalogToday: false,
+    orbiaCatalogToday: true,
     notes: "Page index inside a site. Not an organization.",
   },
   {
@@ -109,7 +109,7 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     displayName: "Builder",
     availability: "available",
     serverGate: true,
-    orbiaCatalogToday: false,
+    orbiaCatalogToday: true,
     notes: "Draft save gate plus the local visual editor. Undo is client-side only.",
   },
   {
@@ -117,7 +117,7 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     displayName: "Assets",
     availability: "available",
     serverGate: true,
-    orbiaCatalogToday: false,
+    orbiaCatalogToday: true,
     notes: "Website asset metadata plus local durable bytes for Crevia uploads.",
   },
   {
@@ -125,7 +125,7 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     displayName: "Themes",
     availability: "available",
     serverGate: true,
-    orbiaCatalogToday: false,
+    orbiaCatalogToday: true,
     notes: "Website theme tokens. Not Orbia platform branding.",
   },
   {
@@ -133,7 +133,7 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     displayName: "Preview",
     availability: "available",
     serverGate: true,
-    orbiaCatalogToday: false,
+    orbiaCatalogToday: true,
     notes: "Draft preview requires a token. Published preview reads the snapshot.",
   },
   {
@@ -141,7 +141,7 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     displayName: "Publishing",
     availability: "available",
     serverGate: true,
-    orbiaCatalogToday: false,
+    orbiaCatalogToday: true,
     notes: "Publication records only. No cloud publish target is configured.",
   },
   {
@@ -149,7 +149,7 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     displayName: "Domains",
     availability: "available",
     serverGate: true,
-    orbiaCatalogToday: false,
+    orbiaCatalogToday: true,
     notes: "Hostname metadata only. No DNS or certificate mutation.",
   },
   {
@@ -157,7 +157,7 @@ export const MODULE_DESCRIPTORS: readonly ModuleDescriptor[] = [
     displayName: "Templates",
     availability: "planned",
     serverGate: false,
-    orbiaCatalogToday: false,
+    orbiaCatalogToday: true,
     notes: "Schema validation exists. There is no template catalog.",
   },
 ];

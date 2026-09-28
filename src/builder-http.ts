@@ -3,6 +3,7 @@ import { extname, join } from "node:path";
 
 import { BUILDER_MODULES, createBuilderFixtureOn, FIXTURE_ORBIA_ORG, FIXTURE_USER } from "./builder/fixtures.js";
 import { pageFromSnapshot, renderPage } from "./builder/render.js";
+import type { FreshIntrospectionWrite } from "./contract.js";
 import {
   authenticateLocalSession,
   authenticateProductRequest,
@@ -77,6 +78,51 @@ async function authenticate(deps: ServerDeps, cookie: string) {
 
 function hasModule(context: ProductContext, key: ProductContext["modules"][number]) {
   return context.modules.includes(key);
+}
+
+async function authorizeLive(deps: ServerDeps, context: ProductContext, action: FreshIntrospectionWrite) {
+  if (deps.identityMode === "orbia") {
+    if (typeof deps.controlPlane.introspect !== "function") {
+      return { ok: false as const, reason: "introspection_unavailable" as const };
+    }
+
+    const fresh = await deps.controlPlane.introspect({
+      orbiaUserId: context.orbiaUserId,
+      organizationId: context.orbiaOrganizationId,
+      clientId: deps.clientId,
+      clientSecret: deps.clientSecret,
+    });
+
+    if (!fresh.ok) {
+      return { ok: false as const, reason: "introspection_unavailable" as const };
+    }
+
+    return authorizeSensitiveWrite({
+      context,
+      directory: {
+        organizationStatus: fresh.view.organizationStatus,
+        membershipStatus: fresh.view.membershipStatus,
+        appEnabled: fresh.view.appEnabled,
+        modules: fresh.view.modules,
+        creviaOrganizationId: context.creviaOrganizationId,
+        evaluatedAt: fresh.view.evaluatedAt,
+      },
+      action,
+    });
+  }
+
+  return authorizeSensitiveWrite({
+    context,
+    directory: {
+      organizationStatus: "active",
+      membershipStatus: "active",
+      appEnabled: true,
+      modules: context.modules,
+      creviaOrganizationId: context.creviaOrganizationId,
+      evaluatedAt: context.evaluatedAt,
+    },
+    action,
+  });
 }
 
 async function siteOwned(deps: ServerDeps, context: ProductContext, siteId: string) {
@@ -246,18 +292,7 @@ export async function handleBuilderRequest(
       return json(401, session);
     }
 
-    const authorized = authorizeSensitiveWrite({
-      context: session.context,
-      directory: {
-        organizationStatus: "active",
-        membershipStatus: "active",
-        appEnabled: true,
-        modules: session.context.modules,
-        creviaOrganizationId: session.context.creviaOrganizationId,
-        evaluatedAt: session.context.evaluatedAt,
-      },
-      action: "publish",
-    });
+    const authorized = await authorizeLive(deps, session.context, "publish");
 
     if (!authorized.ok) {
       return json(403, authorized);
@@ -444,18 +479,7 @@ export async function handleBuilderRequest(
       return json(401, session);
     }
 
-    const authorized = authorizeSensitiveWrite({
-      context: session.context,
-      directory: {
-        organizationStatus: "active",
-        membershipStatus: "active",
-        appEnabled: true,
-        modules: session.context.modules,
-        creviaOrganizationId: session.context.creviaOrganizationId,
-        evaluatedAt: session.context.evaluatedAt,
-      },
-      action: "asset.delete",
-    });
+    const authorized = await authorizeLive(deps, session.context, "asset.delete");
 
     if (!authorized.ok) {
       return json(403, authorized);

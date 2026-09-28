@@ -68,6 +68,16 @@ type IssuedCode = {
   grant: ExchangeGrant;
 };
 
+export type IntrospectionView = {
+  organizationStatus: "active" | "suspended";
+  membershipStatus: "active" | "revoked";
+  appEnabled: boolean;
+  modules: CreviaModuleKey[];
+  evaluatedAt: string;
+};
+
+export type IntrospectionResult = { ok: true; view: IntrospectionView } | { ok: false; reason: ExchangeFailure };
+
 export type ControlPlane = {
   exchange(input: {
     code: string;
@@ -75,6 +85,12 @@ export type ControlPlane = {
     clientId: string;
     clientSecret: string;
   }): Promise<ExchangeResult>;
+  introspect?(input: {
+    orbiaUserId: string;
+    organizationId: string;
+    clientId: string;
+    clientSecret: string;
+  }): Promise<IntrospectionResult>;
 };
 
 export function hashToken(token: string): string {
@@ -171,11 +187,154 @@ export function createMemoryControlPlane(input: {
   };
 }
 
-/** Wave 7A never calls Orbia. A later wave replaces this client. */
-export function createOrbiaExchangeClient(): ControlPlane {
+const MEMBERSHIP_ROLES = new Set<OrbiaMembershipRole>(["viewer", "member", "admin", "owner"]);
+
+function mapExchangeFailure(status: number, reason: string): ExchangeFailure {
+  if (reason === "wrong_app") return "wrong_app";
+  if (reason === "wrong_client" || reason === "server_auth_unconfigured" || status === 401) return "wrong_client";
+  if (reason === "expired") return "expired";
+  if (reason === "reused" || reason === "replay") return "replay";
+  if (reason === "app_disabled") return "app_disabled";
+  if (reason === "membership_revoked" || reason === "membership_inactive" || reason === "no_membership") return "membership_revoked";
+  if (reason === "organization_suspended" || reason === "organization_inactive") return "organization_suspended";
+  return "invalid_code";
+}
+
+function modulesFrom(value: unknown): CreviaModuleKey[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === "string" ? resolveModuleKey(item) : null))
+    .filter((item): item is CreviaModuleKey => item !== null);
+}
+
+function membershipRoleFrom(value: unknown): OrbiaMembershipRole | null {
+  return typeof value === "string" && MEMBERSHIP_ROLES.has(value as OrbiaMembershipRole)
+    ? (value as OrbiaMembershipRole)
+    : null;
+}
+
+async function postOrbia(
+  fetchImpl: typeof fetch,
+  url: string,
+  headers: Record<string, string>,
+  body: unknown,
+): Promise<{ status: number; payload: Record<string, unknown> }> {
+  try {
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    const payload = (await response.json().catch(() => ({}))) as unknown;
+    return {
+      status: response.status,
+      payload: payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {},
+    };
+  } catch {
+    return { status: 0, payload: {} };
+  }
+}
+
+function grantFromPayload(payload: Record<string, unknown>): ExchangeResult {
+  const role = membershipRoleFrom(payload.membershipRole);
+  const orbiaUserId = typeof payload.orbiaUserId === "string" ? payload.orbiaUserId : typeof payload.userId === "string" ? payload.userId : "";
+  const orbiaOrganizationId = typeof payload.organizationId === "string" ? payload.organizationId : "";
+  const app = payload.app && typeof payload.app === "object" ? (payload.app as Record<string, unknown>) : {};
+  const evaluatedAt = typeof payload.evaluatedAt === "string" ? payload.evaluatedAt : new Date().toISOString();
+
+  if (!role || !orbiaUserId || !orbiaOrganizationId) {
+    return { ok: false, reason: "invalid_code" };
+  }
+
+  if (payload.appKey != null && payload.appKey !== CREVIA_APP_KEY) {
+    return { ok: false, reason: "wrong_app" };
+  }
+
+  const organizationStatus = payload.organizationStatus === "suspended" ? "suspended" : "active";
+  const membershipStatus = payload.membershipStatus === "active" || payload.membershipStatus == null ? "active" : "revoked";
+  const appEnabled = app.enabled === true;
+
   return {
-    async exchange() {
-      return { ok: false, reason: "live_orbia_disabled" };
+    ok: true,
+    grant: {
+      orbiaUserId,
+      orbiaOrganizationId,
+      membershipRole: role,
+      modules: modulesFrom(payload.modules),
+      organizationStatus,
+      membershipStatus,
+      appEnabled,
+      evaluatedAt,
+    },
+  };
+}
+
+/**
+ * Live Orbia exchange. Without a base URL this client makes no network call.
+ * Infrastructure mode stays available for rollback and does not use this client.
+ */
+export function createOrbiaExchangeClient(input?: { baseUrl?: string; fetchImpl?: typeof fetch }): ControlPlane {
+  const baseUrl = String(input?.baseUrl || "").replace(/\/+$/, "");
+
+  if (!baseUrl) {
+    return {
+      async exchange() {
+        return { ok: false, reason: "live_orbia_disabled" };
+      },
+    };
+  }
+
+  const fetchImpl = input?.fetchImpl ?? fetch;
+
+  function headers(clientId: string, clientSecret: string): Record<string, string> {
+    return {
+      "content-type": "application/json",
+      "x-orbia-client-id": clientId,
+      "x-orbia-client-secret": clientSecret,
+    };
+  }
+
+  return {
+    async exchange(request) {
+      const posted = await postOrbia(fetchImpl, `${baseUrl}/api/internal/auth/exchange`, headers(request.clientId, request.clientSecret), {
+        code: request.code,
+        appKey: request.appKey,
+      });
+
+      if (posted.status !== 200 || posted.payload.ok === false) {
+        return { ok: false, reason: mapExchangeFailure(posted.status, String(posted.payload.reason || "")) };
+      }
+
+      return grantFromPayload(posted.payload);
+    },
+    async introspect(request) {
+      const posted = await postOrbia(fetchImpl, `${baseUrl}/api/internal/auth/introspect`, headers(request.clientId, request.clientSecret), {
+        appKey: CREVIA_APP_KEY,
+        orbiaUserId: request.orbiaUserId,
+        organizationId: request.organizationId,
+      });
+
+      if (posted.status !== 200 || posted.payload.ok === false) {
+        return { ok: false, reason: mapExchangeFailure(posted.status, String(posted.payload.reason || "")) };
+      }
+
+      const granted = grantFromPayload(posted.payload);
+
+      if (!granted.ok) return granted;
+      if (granted.grant.orbiaOrganizationId !== request.organizationId || granted.grant.orbiaUserId !== request.orbiaUserId) {
+        return { ok: false, reason: "invalid_code" };
+      }
+
+      return {
+        ok: true,
+        view: {
+          organizationStatus: granted.grant.organizationStatus,
+          membershipStatus: granted.grant.membershipStatus,
+          appEnabled: granted.grant.appEnabled,
+          modules: granted.grant.modules,
+          evaluatedAt: granted.grant.evaluatedAt,
+        },
+      };
     },
   };
 }

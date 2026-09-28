@@ -50,6 +50,7 @@ export async function handleRequest(
       clientId: deps.clientId,
       clientSecret: deps.clientSecret,
       provisioningKey: deps.provisioningKey,
+      orbiaBaseUrl: deps.orbiaBaseUrl,
       persistence: checkStateFromHealth(checks.database.ok),
       storage: checkStateFromHealth(checks.storage.ok),
       migration: checkStateFromHealth(checks.migration.ok),
