@@ -101,11 +101,15 @@ export async function handleBuilderRequest(
   const path = url.pathname;
 
   if (input.method === "GET" && (path === "/" || path === "/app" || path.startsWith("/app/") || path.startsWith("/assets/"))) {
+    if (deps.identityMode === "infrastructure") {
+      return json(403, { ok: false, reason: "infrastructure_mode" });
+    }
+
     return serveWeb(path);
   }
 
   if (input.method === "POST" && path === "/api/dev/fixture") {
-    if (deps.appEnv !== "LOCAL" && deps.appEnv !== "TEST") {
+    if (deps.identityMode === "infrastructure" || (deps.appEnv !== "LOCAL" && deps.appEnv !== "TEST")) {
       return json(403, { ok: false, reason: "dev_actor_forbidden" });
     }
 

@@ -1080,13 +1080,13 @@ export function createPostgresRepository(prisma: PrismaClient, storage: AssetSto
     },
     async health() {
       try {
-        await Promise.race([
-          prisma.$queryRaw`SELECT 1`,
-          new Promise((_, reject) => {
+        const rows = await Promise.race([
+          prisma.$queryRaw<Array<{ name: string }>>`SELECT current_database() AS name`,
+          new Promise<Array<{ name: string }>>((_, reject) => {
             setTimeout(() => reject(new Error("database_health_timeout")), 2000);
           }),
         ]);
-        return { ok: true, state: "ok" };
+        return { ok: true, state: "ok", databaseName: rows[0]?.name };
       } catch {
         return { ok: false, state: "down" };
       }

@@ -396,6 +396,10 @@ export async function authenticateProductRequest(input: {
     return { ok: false as const, reason: "no_session" as const };
   }
 
+  if (input.mode === "infrastructure") {
+    return { ok: false as const, reason: "infrastructure_mode" as const };
+  }
+
   if (input.mode !== "orbia") {
     return { ok: false as const, reason: "orbia_mode_required" as const };
   }

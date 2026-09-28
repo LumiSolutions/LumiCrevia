@@ -1,0 +1,11 @@
+node_modules
+dist
+var
+data
+.git
+.env
+.env.*
+*.dump
+tests
+docs
+web/node_modules

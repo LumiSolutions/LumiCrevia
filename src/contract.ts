@@ -10,7 +10,31 @@ export const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 export const PREVIEW_TTL_MS = 8 * 60 * 60 * 1000;
 export const CODE_TTL_MS = 90_000;
 
-export type CreviaIdentityMode = "dev" | "orbia";
+export type CreviaIdentityMode = "dev" | "orbia" | "infrastructure";
+
+export function parseIdentityMode(value: string | undefined): CreviaIdentityMode {
+  if (value === "orbia" || value === "infrastructure" || value === "dev") {
+    return value;
+  }
+
+  return "dev";
+}
+
+export function infrastructureModeAllowed(appEnv: string): boolean {
+  return appEnv === "staging" || appEnv === "STAGING";
+}
+
+export function cloudStartupAllowed(appEnv: string, identityMode: CreviaIdentityMode): boolean {
+  if (appEnv === "LOCAL" || appEnv === "TEST") {
+    return true;
+  }
+
+  if (identityMode === "orbia") {
+    return true;
+  }
+
+  return identityMode === "infrastructure" && infrastructureModeAllowed(appEnv);
+}
 export type OrbiaMembershipRole = "viewer" | "member" | "admin" | "owner";
 export type ModuleAvailability = "available" | "planned";
 

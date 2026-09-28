@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
+import { createAzureBlobAssetStorage, createAzureBlobPortFromEnv } from "./azure-blob-storage.js";
+import { parseIdentityMode, type CreviaIdentityMode } from "./contract.js";
 import { createOrbiaExchangeClient, createSessionStore, type SessionStore } from "./identity.js";
 import { createMemoryRepository } from "./memory-repository.js";
 import { createPostgresRepository } from "./postgres-repository.js";
@@ -7,6 +9,7 @@ import { createPostgresSessionStore } from "./postgres-sessions.js";
 import type { FoundationRepository } from "./repository.js";
 import {
   createLocalFilesystemAssetStorage,
+  createUnconfiguredAssetStorage,
   defaultAssetStoragePath,
   type AssetStorage,
 } from "./storage.js";
@@ -37,6 +40,45 @@ export function resolveAssetStoragePath(appEnv: string): string {
   return env("CREVIA_ASSET_STORAGE_PATH") || defaultAssetStoragePath(appEnv);
 }
 
+export function stagingLike(appEnv: string): boolean {
+  return appEnv === "staging" || appEnv === "STAGING" || appEnv === "production";
+}
+
+export async function createRuntimeAssetStorage(appEnv: string): Promise<AssetStorage> {
+  const driver = env("CREVIA_ASSET_STORAGE");
+  const localAllowed = appEnv === "LOCAL" || appEnv === "TEST";
+
+  if (driver === "azure" || (!localAllowed && (env("CREVIA_AZURE_STORAGE_ACCOUNT") || env("CREVIA_AZURE_BLOB_SAS_URL")))) {
+    const account = env("CREVIA_AZURE_STORAGE_ACCOUNT") || "lumisolutionsstorage";
+    const container = env("CREVIA_AZURE_ASSET_CONTAINER") || "crevia-assets";
+    const sasUrl = env("CREVIA_AZURE_BLOB_SAS_URL");
+    const connectionString = env("CREVIA_AZURE_STORAGE_CONNECTION_STRING") || env("AZURE_STORAGE_CONNECTION_STRING");
+
+    if (!sasUrl && !connectionString && !env("CREVIA_AZURE_STORAGE_ACCOUNT") && driver !== "azure") {
+      return createUnconfiguredAssetStorage();
+    }
+
+    try {
+      const port = await createAzureBlobPortFromEnv({ account, container, connectionString, sasUrl });
+      return createAzureBlobAssetStorage(port);
+    } catch {
+      return createUnconfiguredAssetStorage();
+    }
+  }
+
+  if (!localAllowed) {
+    return createUnconfiguredAssetStorage();
+  }
+
+  const path = resolveAssetStoragePath(appEnv);
+
+  if (!path) {
+    return createUnconfiguredAssetStorage();
+  }
+
+  return createLocalFilesystemAssetStorage(path);
+}
+
 export function createPrismaClient(databaseUrl: string): PrismaClient {
   return new PrismaClient({
     datasources: { db: { url: databaseUrl } },
@@ -51,7 +93,7 @@ export function createMemoryServerDeps(input?: {
   provisioningKey?: string;
   clientId?: string;
   clientSecret?: string;
-  identityMode?: "dev" | "orbia";
+  identityMode?: CreviaIdentityMode;
   appEnv?: string;
   secureCookies?: boolean;
 }): ServerDeps {
@@ -80,7 +122,7 @@ export function createPostgresServerDeps(input: {
   provisioningKey?: string;
   clientId?: string;
   clientSecret?: string;
-  identityMode?: "dev" | "orbia";
+  identityMode?: CreviaIdentityMode;
   appEnv?: string;
   secureCookies?: boolean;
 }): ServerDeps {
@@ -98,26 +140,21 @@ export function createPostgresServerDeps(input: {
     clientSecret: input.clientSecret ?? "",
     identityMode: input.identityMode ?? "dev",
     appEnv,
-    secureCookies: input.secureCookies ?? (appEnv === "staging" || appEnv === "production"),
+    secureCookies: input.secureCookies ?? stagingLike(appEnv),
   };
 }
 
-export function serverDepsFromEnv(): ServerDeps & { repository: FoundationRepository } {
+export async function serverDepsFromEnv(): Promise<ServerDeps & { repository: FoundationRepository }> {
   const appEnv = env("CREVIA_APP_ENV") || "LOCAL";
-  const identityMode = env("CREVIA_IDENTITY_MODE") === "orbia" ? "orbia" : "dev";
+  const identityMode = parseIdentityMode(env("CREVIA_IDENTITY_MODE"));
   const databaseUrl = localDatabaseUrl(appEnv);
-  const storagePath = resolveAssetStoragePath(appEnv);
 
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is required for durable Crevia persistence");
   }
 
-  if (!storagePath) {
-    throw new Error("CREVIA_ASSET_STORAGE_PATH is required outside LOCAL/TEST");
-  }
-
   const prisma = createPrismaClient(databaseUrl);
-  const storage = createLocalFilesystemAssetStorage(storagePath);
+  const storage = await createRuntimeAssetStorage(appEnv);
 
   return createPostgresServerDeps({
     prisma,
@@ -127,6 +164,6 @@ export function serverDepsFromEnv(): ServerDeps & { repository: FoundationReposi
     clientSecret: env("CREVIA_ORBIA_CLIENT_SECRET"),
     identityMode,
     appEnv,
-    secureCookies: appEnv === "staging" || appEnv === "production",
+    secureCookies: stagingLike(appEnv),
   });
 }

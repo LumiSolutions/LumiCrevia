@@ -866,7 +866,7 @@ describe("http", () => {
 });
 
 describe("process start", () => {
-  it("fails closed when production-like mode is not orbia", () => {
+  it("fails closed when production-like mode is not orbia", async () => {
     const previousEnv = process.env.CREVIA_APP_ENV;
     const previousMode = process.env.CREVIA_IDENTITY_MODE;
     const previousUrl = process.env.DATABASE_URL;
@@ -875,7 +875,7 @@ describe("process start", () => {
     process.env.CREVIA_IDENTITY_MODE = "dev";
     process.env.DATABASE_URL = "postgresql://crevia:crevia_local_only@127.0.0.1:5432/crevia_local";
     process.env.CREVIA_ASSET_STORAGE_PATH = `${process.cwd()}/var/crevia-assets`;
-    const deps = serverDepsFromEnv();
+    const deps = await serverDepsFromEnv();
     assert.equal(deps.identityMode, "dev");
     assert.equal(deps.appEnv, "production");
     assert.equal(deps.secureCookies, true);

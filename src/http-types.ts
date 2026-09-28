@@ -1,3 +1,4 @@
+import type { CreviaIdentityMode } from "./contract.js";
 import type { ControlPlane, SessionStore } from "./identity.js";
 import type { FoundationRepository } from "./repository.js";
 import type { AssetStorage } from "./storage.js";
@@ -16,7 +17,7 @@ export type ServerDeps = {
   provisioningKey: string;
   clientId: string;
   clientSecret: string;
-  identityMode: "dev" | "orbia";
+  identityMode: CreviaIdentityMode;
   appEnv: string;
   secureCookies: boolean;
 };

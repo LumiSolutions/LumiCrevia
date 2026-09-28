@@ -1,7 +1,11 @@
-export type CheckState = "ready" | "degraded" | "missing";
+import type { CreviaIdentityMode } from "./contract.js";
+
+export type CheckState = "ready" | "degraded" | "missing" | "skipped";
 
 export type ReadinessReport = {
   status: "ready" | "degraded" | "not_ready";
+  mode?: "infrastructure";
+  proof?: { database?: string };
   checks: {
     persistence: CheckState;
     storage: CheckState;
@@ -15,7 +19,7 @@ export type ReadinessReport = {
 };
 
 export function evaluateReadiness(input: {
-  identityMode: "dev" | "orbia";
+  identityMode: CreviaIdentityMode;
   appEnv: string;
   clientId: string;
   clientSecret: string;
@@ -23,14 +27,18 @@ export function evaluateReadiness(input: {
   persistence?: CheckState;
   storage?: CheckState;
   migration?: CheckState;
+  databaseName?: string;
 }): ReadinessReport {
-  const productionLike = input.appEnv === "staging" || input.appEnv === "production";
+  const productionLike = input.appEnv === "staging" || input.appEnv === "STAGING" || input.appEnv === "production";
   const identityConfigured = Boolean(input.clientId && input.clientSecret);
   const provisioningConfigured = Boolean(input.provisioningKey);
+  const infrastructure = input.identityMode === "infrastructure";
 
   let identity: CheckState = "ready";
 
-  if (input.identityMode === "orbia") {
+  if (infrastructure) {
+    identity = "skipped";
+  } else if (input.identityMode === "orbia") {
     identity = identityConfigured ? "ready" : "missing";
   } else if (productionLike) {
     identity = "missing";
@@ -40,11 +48,11 @@ export function evaluateReadiness(input: {
   const persistence: CheckState = input.persistence ?? "ready";
   const storage: CheckState = input.storage ?? "ready";
   const migration: CheckState = input.migration ?? "ready";
-  const provisioning: CheckState = provisioningConfigured ? "ready" : "missing";
+  const provisioning: CheckState = infrastructure ? "skipped" : provisioningConfigured ? "ready" : "missing";
   const builder: CheckState = persistence === "ready" ? "ready" : "missing";
   const database: CheckState = persistence;
 
-  const core = [persistence, identity, provisioning, migration];
+  const core = infrastructure ? [persistence, migration] : [persistence, identity, provisioning, migration];
   const status = core.includes("missing")
     ? "not_ready"
     : publishing === "degraded" || storage === "degraded" || storage === "missing"
@@ -53,6 +61,8 @@ export function evaluateReadiness(input: {
 
   return {
     status,
+    ...(infrastructure ? { mode: "infrastructure" as const } : {}),
+    ...(input.databaseName ? { proof: { database: input.databaseName } } : {}),
     checks: {
       persistence,
       storage,

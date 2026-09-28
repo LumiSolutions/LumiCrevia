@@ -4,6 +4,10 @@ import { authenticateLocalSession, authenticateProductRequest, completeCallback 
 import { checkStateFromHealth, evaluateReadiness, healthReport } from "./readiness.js";
 import type { HttpResponse, ServerDeps } from "./http-types.js";
 
+function infrastructure(deps: ServerDeps): boolean {
+  return deps.identityMode === "infrastructure";
+}
+
 export type { HttpResponse, ServerDeps } from "./http-types.js";
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}): HttpResponse {
@@ -49,11 +53,15 @@ export async function handleRequest(
       persistence: checkStateFromHealth(checks.database.ok),
       storage: checkStateFromHealth(checks.storage.ok),
       migration: checkStateFromHealth(checks.migration.ok),
+      databaseName: checks.database.databaseName,
     });
     return json(report.status === "not_ready" ? 503 : 200, report);
   }
 
   if (input.method === "GET" && path === "/api/auth/orbia/callback") {
+    if (infrastructure(deps)) {
+      return json(403, { ok: false, reason: "infrastructure_mode" });
+    }
     const url = new URL(input.path, "http://crevia.local");
     const code = url.searchParams.get("code") ?? "";
     const password = url.searchParams.get("password") ?? undefined;
@@ -83,6 +91,9 @@ export async function handleRequest(
   }
 
   if (input.method === "POST" && path === "/api/internal/orbia/provision") {
+    if (infrastructure(deps)) {
+      return json(403, { ok: false, reason: "infrastructure_mode" });
+    }
     const header = input.headers["x-crevia-provisioning-key"] ?? "";
     const body = (input.body ?? {}) as {
       action?: "enable" | "disable" | "re-enable";
@@ -111,6 +122,9 @@ export async function handleRequest(
   }
 
   if (input.method === "GET" && path === "/api/session") {
+    if (infrastructure(deps)) {
+      return json(403, { ok: false, reason: "infrastructure_mode" });
+    }
     const cookie = input.headers.cookie ?? "";
     const local = await authenticateLocalSession({
       cookieHeader: cookie,

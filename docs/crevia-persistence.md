@@ -80,7 +80,7 @@ Storage keys are generated as `organizations/{orgId}/sites/{siteId}/assets/{asse
 
 External Syntara, commerce, and platform assets store `sourceSystem` + `externalAssetId` only. Bytes are not copied.
 
-`AzureBlobAssetStorage` is intentionally not implemented in this wave.
+`AzureBlobAssetStorage` is implemented behind `AssetStorage` for staging. LOCAL/TEST still use the filesystem adapter. Staging/production never fall back to `$PWD/var/crevia-assets`.
 
 ## Failure isolation
 

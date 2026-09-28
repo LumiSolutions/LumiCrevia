@@ -180,7 +180,7 @@ export function createMemoryRepository(
       return latestPublication(store, organizationId, siteId);
     },
     async health() {
-      return { ok: true, state: "ok" };
+      return { ok: true, state: "ok", databaseName: "memory" };
     },
     async migrationHealth() {
       return { ok: true, state: "ok" };

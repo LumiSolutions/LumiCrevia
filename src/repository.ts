@@ -10,7 +10,7 @@ import type {
 } from "./store.js";
 import type { SiteSnapshot } from "./validation.js";
 
-export type PersistenceHealth = { ok: boolean; state: "ok" | "down" };
+export type PersistenceHealth = { ok: boolean; state: "ok" | "down"; databaseName?: string };
 
 export type ProvisionInput = {
   provisioningKey: string;

@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 
+import { cloudStartupAllowed } from "./contract.js";
 import { serverDepsFromEnv } from "./deps.js";
 import { handleRequest } from "./http.js";
 import type { ServerDeps } from "./http-types.js";
@@ -65,16 +66,20 @@ export function createCreviaServer(deps: ServerDeps) {
 
 const invokedDirectly = process.argv[1]?.endsWith("server.ts") || process.argv[1]?.endsWith("server.js");
 
-if (invokedDirectly) {
+async function startFromEnv() {
   const port = Number(env("PORT") || "3000");
-  const deps = serverDepsFromEnv();
+  const deps = await serverDepsFromEnv();
 
-  if (deps.appEnv !== "LOCAL" && deps.appEnv !== "TEST" && deps.identityMode !== "orbia") {
-    console.error("Crevia refuses to start outside LOCAL/TEST without CREVIA_IDENTITY_MODE=orbia");
+  if (!cloudStartupAllowed(deps.appEnv, deps.identityMode)) {
+    console.error("Crevia refuses to start outside LOCAL/TEST without CREVIA_IDENTITY_MODE=orbia or staging infrastructure mode");
     process.exit(1);
   }
 
-  createCreviaServer(deps).listen(port, () => {
+  createCreviaServer(deps).listen(port, "0.0.0.0", () => {
     console.log(`lumicrevia listening on ${port}`);
   });
+}
+
+if (invokedDirectly) {
+  void startFromEnv();
 }

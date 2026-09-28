@@ -154,7 +154,7 @@ export function storageKeyBelongsTo(organizationId: string, key: string): boolea
   return parsed?.organizationId === organizationId;
 }
 
-function assertRelativeKey(key: string): string {
+export function assertRelativeKey(key: string): string {
   if (!key || key.includes("\0") || key.includes("..") || key.startsWith("/") || key.startsWith("\\") || key.includes("://")) {
     throw new Error("invalid_storage_key");
   }
@@ -166,6 +166,40 @@ function assertRelativeKey(key: string): string {
   }
 
   return key;
+}
+
+export function assertRuntimeStorageKey(key: string): string {
+  const safe = assertRelativeKey(key);
+
+  if (safe.startsWith("_health/")) {
+    return safe;
+  }
+
+  if (!safe.startsWith("organizations/")) {
+    throw new Error("invalid_storage_key");
+  }
+
+  return safe;
+}
+
+export function createUnconfiguredAssetStorage(): AssetStorage {
+  return {
+    async put() {
+      throw new Error("asset_storage_unconfigured");
+    },
+    async get() {
+      return null;
+    },
+    async delete() {
+      return;
+    },
+    async exists() {
+      return false;
+    },
+    async health() {
+      return { ok: false, state: "down" as const };
+    },
+  };
 }
 
 export function defaultAssetStoragePath(appEnv: string): string {
