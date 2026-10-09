@@ -183,7 +183,7 @@ export async function handleBuilderRequest(
     return json(200, { ...fixture, context: opened.context }, { "set-cookie": opened.cookie });
   }
 
-  if (input.method === "GET" && path === "/api/sites") {
+  if (path === "/api/sites" && (input.method === "GET" || input.method === "POST")) {
     const session = await authenticate(deps, input.headers.cookie ?? "");
 
     if (!session.ok) {
@@ -194,7 +194,33 @@ export async function handleBuilderRequest(
       return json(403, { ok: false, reason: "module_disabled" });
     }
 
-    return json(200, { ok: true, sites: await deps.repository.listSites(session.context.creviaOrganizationId) });
+    if (input.method === "GET") {
+      return json(200, { ok: true, sites: await deps.repository.listSites(session.context.creviaOrganizationId) });
+    }
+
+    if (!session.context.capabilities.includes("SITE_WRITE")) {
+      return json(403, { ok: false, reason: "capability_denied" });
+    }
+
+    const body = (input.body ?? {}) as { name?: string };
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+
+    if (!name) {
+      return json(400, { ok: false, reason: "invalid_site" });
+    }
+
+    const created = await deps.repository.createSite({
+      organizationId: session.context.creviaOrganizationId,
+      name,
+      createdBy: session.context.orbiaUserId,
+      modules: session.context.modules,
+    });
+
+    if (!created.ok) {
+      return json(403, created);
+    }
+
+    return json(201, { ok: true, site: created.site, revision: created.revision });
   }
 
   const siteMatch = path.match(/^\/api\/sites\/([^/]+)$/);
