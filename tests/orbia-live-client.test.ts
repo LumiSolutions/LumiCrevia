@@ -128,7 +128,8 @@ describe("live orbia client", () => {
       path: `/api/auth/orbia/callback?code=${plane.issue(grant())}&creviaOrganizationId=${created.localOrganizationId}`,
       headers: {},
     }, deps);
-    assert.equal(callback.status, 200);
+    assert.equal(callback.status, 302);
+    assert.equal(callback.headers.location, "/app");
     const cookie = callback.headers["set-cookie"] ?? "";
     assert.equal(cookie.includes("crevia_session="), true);
     const stored = await deps.sessions.values();

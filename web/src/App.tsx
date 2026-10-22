@@ -30,9 +30,25 @@ export function App() {
     return <Builder siteId={decodeURIComponent(builder[1]!)} />;
   }
 
+  const orbiaHq = (window as Window & { __CREVIA_ORBIA_HQ__?: string }).__CREVIA_ORBIA_HQ__;
+
   return (
     <div className="sites">
-      <h1>Crevia</h1>
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <h1>Crevia</h1>
+        {orbiaHq ? (
+          <button
+            type="button"
+            onClick={() => {
+              const w = window.open(orbiaHq, "LumiOrbia");
+              if (!w) window.open(orbiaHq, "_blank", "noopener,noreferrer");
+              else w.focus();
+            }}
+          >
+            Zu Orbia
+          </button>
+        ) : null}
+      </header>
       <p>Local visual editor on the Wave 7A foundation. Fixture mode only.</p>
       {error ? <p>{error}</p> : null}
       {sites.map((site) => (

@@ -18,6 +18,14 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
   };
 }
 
+function redirect(location: string, headers: Record<string, string> = {}): HttpResponse {
+  return {
+    status: 302,
+    headers: { location, ...headers },
+    body: "",
+  };
+}
+
 async function persistenceChecks(deps: ServerDeps) {
   const database = await deps.repository.health();
   const storage = await deps.storage.health();
@@ -88,7 +96,7 @@ export async function handleRequest(
       return json(401, { ok: false, reason: opened.reason });
     }
 
-    return json(200, { ok: true, context: opened.context }, { "set-cookie": opened.cookie });
+    return redirect("/app", { "set-cookie": opened.cookie });
   }
 
   if (input.method === "POST" && path === "/api/internal/orbia/provision") {

@@ -850,7 +850,8 @@ describe("http", () => {
       },
       deps,
     );
-    assert.equal(callback.status, 200);
+    assert.equal(callback.status, 302);
+    assert.equal(callback.headers.location, "/app");
     assert.match(callback.headers["set-cookie"] ?? "", /crevia_session=/);
 
     const session = await handleRequest(

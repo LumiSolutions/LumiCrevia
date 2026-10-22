@@ -31,6 +31,20 @@ const WEB_TYPES: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
+function injectOrbiaHqSnippet(html: string): string {
+  const base = process.env.ORBIA_IDENTITY_BASE_URL?.trim();
+  if (!base) return html;
+  try {
+    const origin = new URL(base.replace(/\/api\/?$/, "")).origin;
+    const slug = (process.env.CREVIA_ORBIA_ORG_SLUG || "lumisolutions").trim();
+    const hq = `${origin}/hq?org=${encodeURIComponent(slug)}`;
+    const snip = `<script>window.__CREVIA_ORBIA_HQ__=${JSON.stringify(hq)}</script>`;
+    return html.includes("</head>") ? html.replace("</head>", `${snip}</head>`) : `${snip}${html}`;
+  } catch {
+    return html;
+  }
+}
+
 function serveWeb(path: string): HttpResponse {
   const root = join(process.cwd(), "dist/web");
   const requested = path.startsWith("/assets/") ? path.slice(1) : "index.html";
@@ -38,7 +52,11 @@ function serveWeb(path: string): HttpResponse {
 
   if (existsSync(file)) {
     const type = WEB_TYPES[extname(file)] ?? "application/octet-stream";
-    return { status: 200, headers: { "content-type": type }, body: readFileSync(file) };
+    let body = readFileSync(file);
+    if (requested === "index.html" && type.includes("html")) {
+      body = Buffer.from(injectOrbiaHqSnippet(body.toString("utf8")), "utf8");
+    }
+    return { status: 200, headers: { "content-type": type }, body };
   }
 
   return html(
